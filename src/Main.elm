@@ -12,8 +12,8 @@ import Keyboard
 import Transform2D
 import Html
 
-gameWidth = 1000
-gameHeight = 1000
+gameWidth = 500
+gameHeight = 500
 
 type GameStatus
   = Dead
@@ -62,8 +62,24 @@ defaultGame =
             }
   }
 
+stepPlayer : Input -> Game -> GameObject
+stepPlayer input game =
+  let
+    arrows = input.arrows
+    player = game.player
+    pos = player.pos
+    dx = if arrows.x < 0 then -1.0 else if arrows.x > 0 then 1.0 else 0.0
+    dy = if arrows.y < 0 then -1.0 else if arrows.y > 0 then 0.5 else 0.0
+    pos' = {pos | x = pos.x + dx, y = pos.y + dy }
+  in
+    { player | pos = pos' }
+
 stepGame : Input -> Game -> Game
-stepGame input game = game
+stepGame input game =
+  let
+    player' = stepPlayer input game
+  in
+    {game | player = player'}
 
 gameState : Signal Game
 gameState =

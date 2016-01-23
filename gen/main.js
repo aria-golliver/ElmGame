@@ -11448,7 +11448,21 @@ Elm.Main.make = function (_elm) {
       A2($Graphics$Collage.rotate,$Basics.degrees(90),triangle));
       return $Graphics$Collage.group(_U.list([t1,t2]));
    };
-   var stepGame = F2(function (input,game) {    return game;});
+   var stepPlayer = F2(function (input,game) {
+      var player = game.player;
+      var pos = player.pos;
+      var arrows = input.arrows;
+      var dx = _U.cmp(arrows.x,0) < 0 ? -1.0 : _U.cmp(arrows.x,
+      0) > 0 ? 1.0 : 0.0;
+      var dy = _U.cmp(arrows.y,0) < 0 ? -1.0 : _U.cmp(arrows.y,
+      0) > 0 ? 0.5 : 0.0;
+      var pos$ = _U.update(pos,{x: pos.x + dx,y: pos.y + dy});
+      return _U.update(player,{pos: pos$});
+   });
+   var stepGame = F2(function (input,game) {
+      var player$ = A2(stepPlayer,input,game);
+      return _U.update(game,{player: player$});
+   });
    var delta = A2($Signal.map,$Time.inSeconds,$Time.fps(35));
    var Game = F2(function (a,b) {
       return {status: a,player: b};
@@ -11466,8 +11480,8 @@ Elm.Main.make = function (_elm) {
                      ,player: {pos: {x: 0,y: 0},c: $Color.black}};
    var gameState = A3($Signal.foldp,stepGame,defaultGame,input);
    var Dead = {ctor: "Dead"};
-   var gameHeight = 1000;
-   var gameWidth = 1000;
+   var gameHeight = 500;
+   var gameWidth = 500;
    var render = function (game) {
       return A3($Graphics$Collage.collage,
       gameWidth,
@@ -11487,6 +11501,7 @@ Elm.Main.make = function (_elm) {
                              ,delta: delta
                              ,input: input
                              ,defaultGame: defaultGame
+                             ,stepPlayer: stepPlayer
                              ,stepGame: stepGame
                              ,gameState: gameState
                              ,renderPlayer: renderPlayer
