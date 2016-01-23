@@ -1,1 +1,5 @@
-readme
+There may be some way to just load index.html through github.
+If not, clone the repo/download the zip and open index.html manually.
+
+controls:
+  arrows = movement
