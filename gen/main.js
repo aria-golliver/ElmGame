@@ -11780,7 +11780,7 @@ Elm.Main.make = function (_elm) {
             ,prevCtrl: i.ctrl
             ,status: status$});
          } else {
-            return game;
+            return i.ctrl ? defaultGame : game;
          }
    });
    var gameState = A3($Signal.foldp,stepGame,defaultGame,input);
@@ -11816,7 +11816,7 @@ Elm.Main.make = function (_elm) {
                     ,renderPlayer(game.player)
                     ,renderPlayerBullets(game.playerBullets)]));
          } else {
-            return $Graphics$Element.show("Dead :(");
+            return $Graphics$Element.show("Dead :(, ctrl to restart");
          }
    };
    var main = A2($Signal.map,render,gameState);

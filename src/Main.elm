@@ -276,7 +276,7 @@ stepGame i game =
         status' = checkDead game.player inboundsEnemies'
       in
         {game | player = player', playerBullets = inboundsBullets', ts = (fst i.delta), enemies = inboundsEnemies', attackType = attackType', prevCtrl = i.ctrl, status = status'}
-    Dead -> game
+    Dead -> if (i.ctrl) then defaultGame else game
 
 gameState : Signal Game
 gameState =
@@ -322,7 +322,7 @@ render game =
     Playing ->
       collage gameWidth gameHeight
         [ (renderBackground game.ts) , (renderEnemies game.enemies), (renderPlayer game.player), (renderPlayerBullets game.playerBullets) ]
-    Dead -> Graphics.Element.show "Dead :("
+    Dead -> Graphics.Element.show "Dead :(, ctrl to restart"
 
 main =
   Signal.map render gameState
