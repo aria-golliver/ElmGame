@@ -11673,6 +11673,14 @@ Elm.Main.make = function (_elm) {
                      ,attackType: StraightAttack
                      ,prevCtrl: false};
    var Dead = {ctor: "Dead"};
+   var checkDead = F2(function (player,enemies) {
+      return A2($List.any,
+      function (enemy) {
+         var _p12 = enemy;
+         return _U.cmp(A2(dist,player.pos,_p12._0),20) < 0;
+      },
+      enemies) ? Dead : Playing;
+   });
    var gameHeight = 500;
    var halfHeight = gameHeight / 2;
    var gameWidth = 500;
@@ -11720,53 +11728,60 @@ Elm.Main.make = function (_elm) {
       return {ctor: "_Tuple2"
              ,_0: A2($List.filter,
              function (enemy) {
-                var _p12 = enemy;
-                var _p13 = _p12._0;
-                return _U.cmp(_p13.x,0 - halfWidth - 100) > 0 && (_U.cmp(_p13.x,
-                halfWidth + 100) < 0 && (_U.cmp(_p13.y,
-                0 - halfHeight - 100) > 0 && _U.cmp(_p13.y,
+                var _p13 = enemy;
+                var _p14 = _p13._0;
+                return _U.cmp(_p14.x,0 - halfWidth - 100) > 0 && (_U.cmp(_p14.x,
+                halfWidth + 100) < 0 && (_U.cmp(_p14.y,
+                0 - halfHeight - 100) > 0 && _U.cmp(_p14.y,
                 halfHeight + 100) < 0));
              },
              enemies)
              ,_1: A2($List.filter,
              function (bullet) {
-                var _p14 = bullet;
-                var _p15 = _p14._0;
-                return _U.cmp(_p15.x,0 - halfWidth - 100) > 0 && (_U.cmp(_p15.x,
-                halfWidth + 100) < 0 && (_U.cmp(_p15.y,
-                0 - halfHeight - 100) > 0 && _U.cmp(_p15.y,
+                var _p15 = bullet;
+                var _p16 = _p15._0;
+                return _U.cmp(_p16.x,0 - halfWidth - 100) > 0 && (_U.cmp(_p16.x,
+                halfWidth + 100) < 0 && (_U.cmp(_p16.y,
+                0 - halfHeight - 100) > 0 && _U.cmp(_p16.y,
                 halfHeight + 100) < 0));
              },
              bullets)};
    });
    var stepGame = F2(function (i,game) {
-      var addedEnemies = addEnemies(i);
-      var enemies$ = A2($List.append,
-      A2(stepEnemies,i,game),
-      addedEnemies);
-      var attackType$ = i.ctrl && $Basics.not(game.prevCtrl) ? getNextAttack(game.attackType) : game.attackType;
-      var addedBullets = A4(addBullets,
-      i.space,
-      game.player.pos,
-      $Basics.fst(i.delta),
-      attackType$);
-      var playerBullets$ = A2($List.append,
-      addedBullets,
-      A2(stepBullets,i,game.playerBullets));
-      var _p16 = A2(checkBulletCollisions,enemies$,playerBullets$);
-      var aliveEnemies$ = _p16._0;
-      var aliveBullets$ = _p16._1;
-      var _p17 = A2(filterOOB,aliveEnemies$,aliveBullets$);
-      var inboundsEnemies$ = _p17._0;
-      var inboundsBullets$ = _p17._1;
-      var player$ = A2(stepPlayer,i,game.player);
-      return _U.update(game,
-      {player: player$
-      ,playerBullets: inboundsBullets$
-      ,ts: $Basics.fst(i.delta)
-      ,enemies: inboundsEnemies$
-      ,attackType: attackType$
-      ,prevCtrl: i.ctrl});
+      var _p17 = game.status;
+      if (_p17.ctor === "Playing") {
+            var addedEnemies = addEnemies(i);
+            var enemies$ = A2($List.append,
+            A2(stepEnemies,i,game),
+            addedEnemies);
+            var attackType$ = i.ctrl && $Basics.not(game.prevCtrl) ? getNextAttack(game.attackType) : game.attackType;
+            var addedBullets = A4(addBullets,
+            i.space,
+            game.player.pos,
+            $Basics.fst(i.delta),
+            attackType$);
+            var playerBullets$ = A2($List.append,
+            addedBullets,
+            A2(stepBullets,i,game.playerBullets));
+            var _p18 = A2(checkBulletCollisions,enemies$,playerBullets$);
+            var aliveEnemies$ = _p18._0;
+            var aliveBullets$ = _p18._1;
+            var _p19 = A2(filterOOB,aliveEnemies$,aliveBullets$);
+            var inboundsEnemies$ = _p19._0;
+            var inboundsBullets$ = _p19._1;
+            var status$ = A2(checkDead,game.player,inboundsEnemies$);
+            var player$ = A2(stepPlayer,i,game.player);
+            return _U.update(game,
+            {player: player$
+            ,playerBullets: inboundsBullets$
+            ,ts: $Basics.fst(i.delta)
+            ,enemies: inboundsEnemies$
+            ,attackType: attackType$
+            ,prevCtrl: i.ctrl
+            ,status: status$});
+         } else {
+            return game;
+         }
    });
    var gameState = A3($Signal.foldp,stepGame,defaultGame,input);
    var renderBackground = function (t) {
@@ -11791,13 +11806,18 @@ Elm.Main.make = function (_elm) {
       _U.range(1,20))));
    };
    var render = function (game) {
-      return A3($Graphics$Collage.collage,
-      gameWidth,
-      gameHeight,
-      _U.list([renderBackground(game.ts)
-              ,renderEnemies(game.enemies)
-              ,renderPlayer(game.player)
-              ,renderPlayerBullets(game.playerBullets)]));
+      var _p20 = game.status;
+      if (_p20.ctor === "Playing") {
+            return A3($Graphics$Collage.collage,
+            gameWidth,
+            gameHeight,
+            _U.list([renderBackground(game.ts)
+                    ,renderEnemies(game.enemies)
+                    ,renderPlayer(game.player)
+                    ,renderPlayerBullets(game.playerBullets)]));
+         } else {
+            return $Graphics$Element.show("Dead :(");
+         }
    };
    var main = A2($Signal.map,render,gameState);
    return _elm.Main.values = {_op: _op
@@ -11842,6 +11862,7 @@ Elm.Main.make = function (_elm) {
                              ,checkBulletCollisions: checkBulletCollisions
                              ,filterOOB: filterOOB
                              ,getNextAttack: getNextAttack
+                             ,checkDead: checkDead
                              ,stepGame: stepGame
                              ,gameState: gameState
                              ,renderPlayerBullets: renderPlayerBullets

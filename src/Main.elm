@@ -256,19 +256,27 @@ getNextAttack attack =
     SinAttack -> CircleAttack
     CircleAttack -> StraightAttack
 
+checkDead : GameObject -> List Enemy -> GameStatus
+checkDead player enemies =
+  if (List.any (\enemy -> case enemy of Enemy enemyPos _ _ -> (dist player.pos enemyPos) < 20) enemies) then Dead else Playing
+
 stepGame : Input -> Game -> Game
 stepGame i game =
-  let
-    player' = stepPlayer i game.player
-    attackType' = if (i.ctrl &&  (not game.prevCtrl)) then (getNextAttack game.attackType) else game.attackType
-    addedBullets = addBullets i.space game.player.pos (fst i.delta) attackType'
-    playerBullets' = List.append addedBullets (stepBullets i game.playerBullets)
-    addedEnemies = addEnemies i
-    enemies' =  List.append (stepEnemies i game) addedEnemies
-    (aliveEnemies', aliveBullets') = checkBulletCollisions enemies' playerBullets'
-    (inboundsEnemies', inboundsBullets') = filterOOB aliveEnemies' aliveBullets'
-  in
-    {game | player = player', playerBullets = inboundsBullets', ts = (fst i.delta), enemies = inboundsEnemies', attackType = attackType', prevCtrl = i.ctrl}
+  case game.status of
+    Playing ->
+      let
+        player' = stepPlayer i game.player
+        attackType' = if (i.ctrl &&  (not game.prevCtrl)) then (getNextAttack game.attackType) else game.attackType
+        addedBullets = addBullets i.space game.player.pos (fst i.delta) attackType'
+        playerBullets' = List.append addedBullets (stepBullets i game.playerBullets)
+        addedEnemies = addEnemies i
+        enemies' =  List.append (stepEnemies i game) addedEnemies
+        (aliveEnemies', aliveBullets') = checkBulletCollisions enemies' playerBullets'
+        (inboundsEnemies', inboundsBullets') = filterOOB aliveEnemies' aliveBullets'
+        status' = checkDead game.player inboundsEnemies'
+      in
+        {game | player = player', playerBullets = inboundsBullets', ts = (fst i.delta), enemies = inboundsEnemies', attackType = attackType', prevCtrl = i.ctrl, status = status'}
+    Dead -> game
 
 gameState : Signal Game
 gameState =
@@ -310,8 +318,11 @@ renderEnemies enemies =
 
 render : Game -> Element
 render game =
-  collage gameWidth gameHeight
-    [ (renderBackground game.ts) , (renderEnemies game.enemies), (renderPlayer game.player), (renderPlayerBullets game.playerBullets) ]
+  case game.status of
+    Playing ->
+      collage gameWidth gameHeight
+        [ (renderBackground game.ts) , (renderEnemies game.enemies), (renderPlayer game.player), (renderPlayerBullets game.playerBullets) ]
+    Dead -> Graphics.Element.show "Dead :("
 
 main =
   Signal.map render gameState
