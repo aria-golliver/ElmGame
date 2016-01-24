@@ -11676,14 +11676,15 @@ Elm.Main.make = function (_elm) {
    delta,
    $Keyboard.space,
    $Keyboard.ctrl));
-   var Playing = {ctor: "Playing"};
-   var defaultGame = {status: Playing
+   var FirstStart = {ctor: "FirstStart"};
+   var defaultGame = {status: FirstStart
                      ,player: {pos: {x: 0,y: 0},c: $Color.black}
                      ,playerBullets: _U.list([])
                      ,ts: 0
                      ,enemies: _U.list([])
                      ,attackType: StraightAttack
-                     ,prevCtrl: false};
+                     ,prevCtrl: true};
+   var Playing = {ctor: "Playing"};
    var Dead = {ctor: "Dead"};
    var checkDead = F2(function (player,enemies) {
       return A2($List.any,
@@ -11761,39 +11762,39 @@ Elm.Main.make = function (_elm) {
    });
    var stepGame = F2(function (i,game) {
       var _p17 = game.status;
-      if (_p17.ctor === "Playing") {
-            var addedEnemies = addEnemies(i);
-            var enemies$ = A2($List.append,
-            A2(stepEnemies,i,game),
-            addedEnemies);
-            var attackType$ = i.ctrl && $Basics.not(game.prevCtrl) ? getNextAttack(game.attackType) : game.attackType;
-            var addedBullets = A4(addBullets,
-            i.space,
-            game.player.pos,
-            $Basics.fst(i.delta),
-            attackType$);
-            var playerBullets$ = A2($List.append,
-            addedBullets,
-            A2(stepBullets,i,game.playerBullets));
-            var _p18 = A2(checkBulletCollisions,enemies$,playerBullets$);
-            var aliveEnemies$ = _p18._0;
-            var aliveBullets$ = _p18._1;
-            var _p19 = A2(filterOOB,aliveEnemies$,aliveBullets$);
-            var inboundsEnemies$ = _p19._0;
-            var inboundsBullets$ = _p19._1;
-            var status$ = A2(checkDead,game.player,inboundsEnemies$);
-            var player$ = A2(stepPlayer,i,game.player);
-            return _U.update(game,
-            {player: player$
-            ,playerBullets: inboundsBullets$
-            ,ts: $Basics.fst(i.delta)
-            ,enemies: inboundsEnemies$
-            ,attackType: attackType$
-            ,prevCtrl: i.ctrl
-            ,status: status$});
-         } else {
-            return i.ctrl ? defaultGame : game;
-         }
+      switch (_p17.ctor)
+      {case "Playing": var addedEnemies = addEnemies(i);
+           var enemies$ = A2($List.append,
+           A2(stepEnemies,i,game),
+           addedEnemies);
+           var attackType$ = i.ctrl && $Basics.not(game.prevCtrl) ? getNextAttack(game.attackType) : game.attackType;
+           var addedBullets = A4(addBullets,
+           i.space,
+           game.player.pos,
+           $Basics.fst(i.delta),
+           attackType$);
+           var playerBullets$ = A2($List.append,
+           addedBullets,
+           A2(stepBullets,i,game.playerBullets));
+           var _p18 = A2(checkBulletCollisions,enemies$,playerBullets$);
+           var aliveEnemies$ = _p18._0;
+           var aliveBullets$ = _p18._1;
+           var _p19 = A2(filterOOB,aliveEnemies$,aliveBullets$);
+           var inboundsEnemies$ = _p19._0;
+           var inboundsBullets$ = _p19._1;
+           var status$ = A2(checkDead,game.player,inboundsEnemies$);
+           var player$ = A2(stepPlayer,i,game.player);
+           return _U.update(game,
+           {player: player$
+           ,playerBullets: inboundsBullets$
+           ,ts: $Basics.fst(i.delta)
+           ,enemies: inboundsEnemies$
+           ,attackType: attackType$
+           ,prevCtrl: i.ctrl
+           ,status: status$});
+         case "Dead": return i.ctrl ? defaultGame : game;
+         default: return i.ctrl ? _U.update(defaultGame,
+           {status: Playing}) : game;}
    });
    var gameState = A3($Signal.foldp,stepGame,defaultGame,input);
    var renderBackground = function (t) {
@@ -11819,24 +11820,29 @@ Elm.Main.make = function (_elm) {
    };
    var render = function (game) {
       var _p20 = game.status;
-      if (_p20.ctor === "Playing") {
-            return A3($Graphics$Collage.collage,
-            gameWidth,
-            gameHeight,
-            _U.list([renderBackground(game.ts)
-                    ,renderEnemies(game.enemies)
-                    ,renderPlayer(game.player)
-                    ,renderPlayerBullets(game.playerBullets)]));
-         } else {
-            return A3($Graphics$Collage.collage,
-            gameWidth,
-            gameHeight,
-            _U.list([renderBackground(game.ts)
-                    ,renderEnemies(game.enemies)
-                    ,renderPlayer(game.player)
-                    ,renderPlayerBullets(game.playerBullets)
-                    ,$Graphics$Collage.toForm($Graphics$Element.show("Dead :(, ctrl to restart"))]));
-         }
+      switch (_p20.ctor)
+      {case "FirstStart": return A3($Graphics$Collage.collage,
+           gameWidth,
+           gameHeight,
+           _U.list([A2($Graphics$Collage.move,
+                   {ctor: "_Tuple2",_0: 0,_1: 20},
+                   $Graphics$Collage.toForm($Graphics$Element.show("arrows to move, space to fire, ctrl to switch weapons")))
+                   ,$Graphics$Collage.toForm($Graphics$Element.show("press ctrl to start!"))]));
+         case "Playing": return A3($Graphics$Collage.collage,
+           gameWidth,
+           gameHeight,
+           _U.list([renderBackground(game.ts)
+                   ,renderEnemies(game.enemies)
+                   ,renderPlayer(game.player)
+                   ,renderPlayerBullets(game.playerBullets)]));
+         default: return A3($Graphics$Collage.collage,
+           gameWidth,
+           gameHeight,
+           _U.list([renderBackground(game.ts)
+                   ,renderEnemies(game.enemies)
+                   ,renderPlayer(game.player)
+                   ,renderPlayerBullets(game.playerBullets)
+                   ,$Graphics$Collage.toForm($Graphics$Element.show("Dead :(, ctrl to restart"))]));}
    };
    var main = A2($Signal.map,render,gameState);
    return _elm.Main.values = {_op: _op
@@ -11846,6 +11852,7 @@ Elm.Main.make = function (_elm) {
                              ,halfHeight: halfHeight
                              ,Dead: Dead
                              ,Playing: Playing
+                             ,FirstStart: FirstStart
                              ,Input: Input
                              ,Point: Point
                              ,GameObject: GameObject

@@ -20,6 +20,7 @@ halfHeight = gameHeight/2
 type GameStatus
   = Dead
   | Playing
+  | FirstStart
 
 type alias Input =
   { arrows : {x : Int, y: Int}
@@ -150,7 +151,7 @@ input =
 
 defaultGame : Game
 defaultGame =
-  { status = Playing
+  { status = FirstStart
   , player = { pos = { x = 0, y = 0 }
              , c = black
              }
@@ -158,7 +159,7 @@ defaultGame =
   , ts = 0
   , enemies = []
   , attackType = StraightAttack
-  , prevCtrl = False
+  , prevCtrl = True
   }
 
 stepPlayer : Input -> GameObject -> GameObject
@@ -277,6 +278,7 @@ stepGame i game =
       in
         {game | player = player', playerBullets = inboundsBullets', ts = (fst i.delta), enemies = inboundsEnemies', attackType = attackType', prevCtrl = i.ctrl, status = status'}
     Dead -> if (i.ctrl) then defaultGame else game
+    FirstStart -> if (i.ctrl) then {defaultGame | status = Playing} else game
 
 gameState : Signal Game
 gameState =
@@ -319,6 +321,11 @@ renderEnemies enemies =
 render : Game -> Element
 render game =
   case game.status of
+    FirstStart ->
+      collage gameWidth gameHeight
+      [ move (0, 20) (Graphics.Collage.toForm (Graphics.Element.show "arrows to move, space to fire, ctrl to switch weapons"))
+      , Graphics.Collage.toForm (Graphics.Element.show "press ctrl to start!")
+      ]
     Playing ->
       collage gameWidth gameHeight
         [ (renderBackground game.ts) , (renderEnemies game.enemies), (renderPlayer game.player), (renderPlayerBullets game.playerBullets) ]
