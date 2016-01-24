@@ -1,5 +1,5 @@
 import Color exposing (Color, black)
-import Graphics.Collage exposing (collage, move, ngon, filled, group, Form, rotate, circle)
+import Graphics.Collage exposing (collage, move, ngon, filled, group, Form, rotate, circle, rect)
 import Graphics.Element exposing (Element)
 import Mouse
 import Signal
@@ -14,6 +14,8 @@ import Html
 
 gameWidth = 500
 gameHeight = 500
+halfWidth = gameWidth/2
+halfHeight = gameHeight/2
 
 type GameStatus
   = Dead
@@ -22,7 +24,8 @@ type GameStatus
 type alias Input =
   { arrows : {x : Int, y: Int}
   , wasd : {x : Int, y: Int}
-  , delta : Time.Time
+  , delta : (Time.Time, Time.Time)
+  , space : Bool
   }
 
 type alias Point =
@@ -41,12 +44,12 @@ type BUpdater = BUpdater Point (Float -> BUpdater)
 
 forwardBulletCreate : Point -> List BUpdater
 forwardBulletCreate pos =
-  [ straightBulletUpdate pos 0 1 0 ]
+  [ straightBulletUpdate pos 0 150 0 ]
 
 diagonalBulletCreate : Point -> List BUpdater
 diagonalBulletCreate pos =
-  [ (straightBulletUpdate pos 1 1 0)
-  , (straightBulletUpdate pos -1 1 0)
+  [ (straightBulletUpdate pos 150 150 0)
+  , (straightBulletUpdate pos -150 150 0)
   ]
 
 straightBulletUpdate : Point -> Float -> Float -> Float -> BUpdater
@@ -56,41 +59,43 @@ straightBulletUpdate pos dx dy delta =
              , y = pos.y + dy * delta
              }
   in
-    BUpdater newpos (straightBulletUpdate pos dx dy)
+    BUpdater newpos (straightBulletUpdate newpos dx dy)
 
-sineBulletCreate : Point -> List BUpdater
-sineBulletCreate pos =
-    [ sineBulletUpdate pos pos 0 ]
+sineBulletCreate : Point -> Time.Time -> List BUpdater
+sineBulletCreate pos t =
+    [ sineBulletUpdate pos pos t 0 ]
 
-sineBulletUpdate : Point -> Point -> Float -> BUpdater
-sineBulletUpdate pos posInitial deltaT =
+sineBulletUpdate : Point -> Point -> Time.Time -> Float -> BUpdater
+sineBulletUpdate pos posInitial initialT deltaT =
     let
       delta = deltaT*50
       newY = pos.y + delta*3
       deltaY = newY - posInitial.y
-      newX = posInitial.x + 50*sin (deltaY/15)
+      newX = posInitial.x + 50* sin((deltaY/15.0) + (initialT/4.7))
       pos' = {x = newX, y = newY}
     in
-      BUpdater pos' (sineBulletUpdate pos' posInitial)
+      BUpdater pos' (sineBulletUpdate pos' posInitial initialT)
 
 
 type alias Game =
   { status : GameStatus
   , player : GameObject
   , playerBullets : List BUpdater
+  , ts : Time.Time
   }
 
-delta : Signal Time.Time
+delta : Signal (Time.Time, Time.Time)
 delta =
-  Signal.map Time.inSeconds (Time.fps 35)
+  (Time.timestamp (Signal.map Time.inSeconds (Time.fps 30)))
 
 input : Signal Input
 input =
   Signal.sampleOn delta <|
-    Signal.map3 Input
+    Signal.map4 Input
       Keyboard.arrows
       Keyboard.wasd
       delta
+      Keyboard.space
 
 defaultGame : Game
 defaultGame =
@@ -98,36 +103,41 @@ defaultGame =
   , player = { pos = { x = 0, y = 0 }
              , c = black
              }
-  , playerBullets = (sineBulletCreate { x = 0, y = 0 })
+  , playerBullets = []
+  , ts = 0
   }
 
 stepPlayer : Input -> GameObject -> GameObject
-stepPlayer input player =
+stepPlayer i player =
   let
-    arrows = input.arrows
+    arrows = i.arrows
     pos = player.pos
-    dx = if arrows.x < 0 then -1.0 else if arrows.x > 0 then 1.0 else 0.0
-    dy = if arrows.y < 0 then -1.0 else if arrows.y > 0 then 0.5 else 0.0
-    pos' = {pos | x = pos.x + dx, y = pos.y + dy }
+    delta = (snd i.delta)
+    dx = if arrows.x < 0 then -75.0 else if arrows.x > 0 then 75.0 else 0.0
+    dy = if arrows.y < 0 then -75.0 else if arrows.y > 0 then 50.0 else 0.0
+    newx = clamp -halfWidth halfWidth (pos.x + dx * delta)
+    newy = clamp -halfHeight halfHeight (pos.y + dy * delta)
+    pos' = {pos | x = newx, y = newy }
   in
     { player | pos = pos' }
 
 stepBullets : Input -> List BUpdater -> List BUpdater
-stepBullets input bullets =
-    List.map (\updater -> (case updater of BUpdater pos update -> update input.delta)) bullets
+stepBullets i bullets =
+    List.map (\updater -> (case updater of BUpdater _ update -> update (snd i.delta))) bullets
 
-stepBullet : Float -> BUpdater -> BUpdater
-stepBullet delta bullet =
-  case bullet of
-    BUpdater pos updater -> updater delta
+addBullets : Bool -> Point -> Time.Time -> List BUpdater
+addBullets space pos t =
+  if space then (sineBulletCreate pos t) else []
 
 stepGame : Input -> Game -> Game
-stepGame input game =
+stepGame i game =
   let
-    player' = stepPlayer input game.player
-    playerBullets' = stepBullets input game.playerBullets
+    player' = stepPlayer i game.player
+    addedBullets = addBullets i.space game.player.pos (fst i.delta)
+    playerBullets' = List.append addedBullets (stepBullets i game.playerBullets)
+    -- playerBullets'' = cleanUpBullets playerBullets
   in
-    {game | player = player', playerBullets = playerBullets'}
+    {game | player = player', playerBullets = playerBullets', ts = (fst i.delta)}
 
 gameState : Signal Game
 gameState =
@@ -155,11 +165,19 @@ renderPlayer player =
   in
     group [t1, t2]
 
+renderBackground : Time.Time -> Form
+renderBackground t =
+  let
+    background = filled Color.green (rect gameWidth gameHeight)
+    stripe = filled Color.grey (rect gameWidth (gameHeight/20.0))
+  in
+    group (background :: (List.map (\i -> (move (0.0, ((i - 21.0) * 40 + gameHeight - (toFloat ((round (t/5.0)) % gameHeight//2)))) stripe)) [1..20]))
+
 
 render : Game -> Element
 render game =
   collage gameWidth gameHeight
-    [ (renderPlayer game.player), (renderPlayerBullets game.playerBullets) ]
+    [ (renderBackground game.ts) , (renderPlayer game.player), (renderPlayerBullets game.playerBullets) ]
 
 main =
   Signal.map render gameState

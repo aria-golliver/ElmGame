@@ -11461,92 +11461,147 @@ Elm.Main.make = function (_elm) {
       },
       bullets));
    };
-   var stepBullet = F2(function (delta,bullet) {
-      var _p2 = bullet;
-      return _p2._1(delta);
-   });
-   var stepBullets = F2(function (input,bullets) {
+   var stepBullets = F2(function (i,bullets) {
       return A2($List.map,
       function (updater) {
-         var _p3 = updater;
-         return _p3._1(input.delta);
+         var _p2 = updater;
+         return _p2._1($Basics.snd(i.delta));
       },
       bullets);
    });
-   var stepPlayer = F2(function (input,player) {
-      var pos = player.pos;
-      var arrows = input.arrows;
-      var dx = _U.cmp(arrows.x,0) < 0 ? -1.0 : _U.cmp(arrows.x,
-      0) > 0 ? 1.0 : 0.0;
-      var dy = _U.cmp(arrows.y,0) < 0 ? -1.0 : _U.cmp(arrows.y,
-      0) > 0 ? 0.5 : 0.0;
-      var pos$ = _U.update(pos,{x: pos.x + dx,y: pos.y + dy});
-      return _U.update(player,{pos: pos$});
-   });
-   var stepGame = F2(function (input,game) {
-      var playerBullets$ = A2(stepBullets,
-      input,
-      game.playerBullets);
-      var player$ = A2(stepPlayer,input,game.player);
-      return _U.update(game,
-      {player: player$,playerBullets: playerBullets$});
-   });
-   var delta = A2($Signal.map,$Time.inSeconds,$Time.fps(35));
-   var Game = F3(function (a,b,c) {
-      return {status: a,player: b,playerBullets: c};
+   var delta = $Time.timestamp(A2($Signal.map,
+   $Time.inSeconds,
+   $Time.fps(30)));
+   var Game = F4(function (a,b,c,d) {
+      return {status: a,player: b,playerBullets: c,ts: d};
    });
    var BUpdater = F2(function (a,b) {
       return {ctor: "BUpdater",_0: a,_1: b};
    });
    var straightBulletUpdate = F4(function (pos,dx,dy,delta) {
       var newpos = {x: pos.x + dx * delta,y: pos.y + dy * delta};
-      return A2(BUpdater,newpos,A3(straightBulletUpdate,pos,dx,dy));
+      return A2(BUpdater,
+      newpos,
+      A3(straightBulletUpdate,newpos,dx,dy));
    });
    var forwardBulletCreate = function (pos) {
-      return _U.list([A4(straightBulletUpdate,pos,0,1,0)]);
+      return _U.list([A4(straightBulletUpdate,pos,0,150,0)]);
    };
    var diagonalBulletCreate = function (pos) {
-      return _U.list([A4(straightBulletUpdate,pos,1,1,0)
-                     ,A4(straightBulletUpdate,pos,-1,1,0)]);
+      return _U.list([A4(straightBulletUpdate,pos,150,150,0)
+                     ,A4(straightBulletUpdate,pos,-150,150,0)]);
    };
-   var sineBulletUpdate = F3(function (pos,posInitial,deltaT) {
+   var sineBulletUpdate = F4(function (pos,
+   posInitial,
+   initialT,
+   deltaT) {
       var delta = deltaT * 50;
       var newY = pos.y + delta * 3;
       var deltaY = newY - posInitial.y;
-      var newX = posInitial.x + 50 * $Basics.sin(deltaY / 15);
+      var newX = posInitial.x + 50 * $Basics.sin(deltaY / 15.0 + initialT / 4.7);
       var pos$ = {x: newX,y: newY};
-      return A2(BUpdater,pos$,A2(sineBulletUpdate,pos$,posInitial));
+      return A2(BUpdater,
+      pos$,
+      A3(sineBulletUpdate,pos$,posInitial,initialT));
    });
-   var sineBulletCreate = function (pos) {
-      return _U.list([A3(sineBulletUpdate,pos,pos,0)]);
-   };
+   var sineBulletCreate = F2(function (pos,t) {
+      return _U.list([A4(sineBulletUpdate,pos,pos,t,0)]);
+   });
+   var addBullets = F3(function (space,pos,t) {
+      return space ? A2(sineBulletCreate,pos,t) : _U.list([]);
+   });
    var GameObject = F2(function (a,b) {    return {pos: a,c: b};});
    var Point = F2(function (a,b) {    return {x: a,y: b};});
-   var Input = F3(function (a,b,c) {
-      return {arrows: a,wasd: b,delta: c};
+   var Input = F4(function (a,b,c,d) {
+      return {arrows: a,wasd: b,delta: c,space: d};
    });
    var input = A2($Signal.sampleOn,
    delta,
-   A4($Signal.map3,Input,$Keyboard.arrows,$Keyboard.wasd,delta));
+   A5($Signal.map4,
+   Input,
+   $Keyboard.arrows,
+   $Keyboard.wasd,
+   delta,
+   $Keyboard.space));
    var Playing = {ctor: "Playing"};
    var defaultGame = {status: Playing
                      ,player: {pos: {x: 0,y: 0},c: $Color.black}
-                     ,playerBullets: sineBulletCreate({x: 0,y: 0})};
-   var gameState = A3($Signal.foldp,stepGame,defaultGame,input);
+                     ,playerBullets: _U.list([])
+                     ,ts: 0};
    var Dead = {ctor: "Dead"};
    var gameHeight = 500;
+   var halfHeight = gameHeight / 2;
    var gameWidth = 500;
+   var halfWidth = gameWidth / 2;
+   var stepPlayer = F2(function (i,player) {
+      var delta = $Basics.snd(i.delta);
+      var pos = player.pos;
+      var arrows = i.arrows;
+      var dx = _U.cmp(arrows.x,0) < 0 ? -75.0 : _U.cmp(arrows.x,
+      0) > 0 ? 75.0 : 0.0;
+      var newx = A3($Basics.clamp,
+      0 - halfWidth,
+      halfWidth,
+      pos.x + dx * delta);
+      var dy = _U.cmp(arrows.y,0) < 0 ? -75.0 : _U.cmp(arrows.y,
+      0) > 0 ? 50.0 : 0.0;
+      var newy = A3($Basics.clamp,
+      0 - halfHeight,
+      halfHeight,
+      pos.y + dy * delta);
+      var pos$ = _U.update(pos,{x: newx,y: newy});
+      return _U.update(player,{pos: pos$});
+   });
+   var stepGame = F2(function (i,game) {
+      var addedBullets = A3(addBullets,
+      i.space,
+      game.player.pos,
+      $Basics.fst(i.delta));
+      var playerBullets$ = A2($List.append,
+      addedBullets,
+      A2(stepBullets,i,game.playerBullets));
+      var player$ = A2(stepPlayer,i,game.player);
+      return _U.update(game,
+      {player: player$
+      ,playerBullets: playerBullets$
+      ,ts: $Basics.fst(i.delta)});
+   });
+   var gameState = A3($Signal.foldp,stepGame,defaultGame,input);
+   var renderBackground = function (t) {
+      var stripe = A2($Graphics$Collage.filled,
+      $Color.grey,
+      A2($Graphics$Collage.rect,gameWidth,gameHeight / 20.0));
+      var background = A2($Graphics$Collage.filled,
+      $Color.green,
+      A2($Graphics$Collage.rect,gameWidth,gameHeight));
+      return $Graphics$Collage.group(A2($List._op["::"],
+      background,
+      A2($List.map,
+      function (i) {
+         return A2($Graphics$Collage.move,
+         {ctor: "_Tuple2"
+         ,_0: 0.0
+         ,_1: (i - 21.0) * 40 + gameHeight - $Basics.toFloat(A2($Basics._op["%"],
+         $Basics.round(t / 5.0),
+         gameHeight) / 2 | 0)},
+         stripe);
+      },
+      _U.range(1,20))));
+   };
    var render = function (game) {
       return A3($Graphics$Collage.collage,
       gameWidth,
       gameHeight,
-      _U.list([renderPlayer(game.player)
+      _U.list([renderBackground(game.ts)
+              ,renderPlayer(game.player)
               ,renderPlayerBullets(game.playerBullets)]));
    };
    var main = A2($Signal.map,render,gameState);
    return _elm.Main.values = {_op: _op
                              ,gameWidth: gameWidth
                              ,gameHeight: gameHeight
+                             ,halfWidth: halfWidth
+                             ,halfHeight: halfHeight
                              ,Dead: Dead
                              ,Playing: Playing
                              ,Input: Input
@@ -11564,11 +11619,12 @@ Elm.Main.make = function (_elm) {
                              ,defaultGame: defaultGame
                              ,stepPlayer: stepPlayer
                              ,stepBullets: stepBullets
-                             ,stepBullet: stepBullet
+                             ,addBullets: addBullets
                              ,stepGame: stepGame
                              ,gameState: gameState
                              ,renderPlayerBullets: renderPlayerBullets
                              ,renderPlayer: renderPlayer
+                             ,renderBackground: renderBackground
                              ,render: render
                              ,main: main};
 };
