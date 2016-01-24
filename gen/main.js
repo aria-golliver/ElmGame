@@ -11539,13 +11539,27 @@ Elm.Main.make = function (_elm) {
    var delta = $Time.timestamp(A2($Signal.map,
    $Time.inSeconds,
    $Time.fps(30)));
-   var Game = F5(function (a,b,c,d,e) {
+   var Game = F7(function (a,b,c,d,e,f,g) {
       return {status: a
-             ,player: b
-             ,playerBullets: c
-             ,ts: d
-             ,enemies: e};
+             ,attackType: b
+             ,player: c
+             ,playerBullets: d
+             ,ts: e
+             ,enemies: f
+             ,prevCtrl: g};
    });
+   var CircleAttack = {ctor: "CircleAttack"};
+   var SinAttack = {ctor: "SinAttack"};
+   var DiagonalAttack = {ctor: "DiagonalAttack"};
+   var StraightAttack = {ctor: "StraightAttack"};
+   var getNextAttack = function (attack) {
+      var _p10 = attack;
+      switch (_p10.ctor)
+      {case "StraightAttack": return DiagonalAttack;
+         case "DiagonalAttack": return SinAttack;
+         case "SinAttack": return CircleAttack;
+         default: return StraightAttack;}
+   };
    var Enemy = F3(function (a,b,c) {
       return {ctor: "Enemy",_0: a,_1: b,_2: c};
    });
@@ -11610,9 +11624,6 @@ Elm.Main.make = function (_elm) {
       return _U.list([A4(straightBulletUpdate,pos,dx * 150,dy * 150,0)
                      ,A4(straightBulletUpdate,pos,dy * 150,dx * 150,0)]);
    });
-   var addBullets = F3(function (space,pos,t) {
-      return space ? A2(circleBulletCreate,pos,t) : _U.list([]);
-   });
    var sineBulletUpdate = F4(function (pos,
    posInitial,
    initialT,
@@ -11629,25 +11640,38 @@ Elm.Main.make = function (_elm) {
    var sineBulletCreate = F2(function (pos,t) {
       return _U.list([A4(sineBulletUpdate,pos,pos,t,0)]);
    });
+   var addBullets = F4(function (space,pos,t,attack) {
+      if (space) {
+            var _p11 = attack;
+            switch (_p11.ctor)
+            {case "StraightAttack": return forwardBulletCreate(pos);
+               case "DiagonalAttack": return diagonalBulletCreate(pos);
+               case "SinAttack": return A2(sineBulletCreate,pos,t);
+               default: return A2(circleBulletCreate,pos,t);}
+         } else return _U.list([]);
+   });
    var GameObject = F2(function (a,b) {    return {pos: a,c: b};});
    var Point = F2(function (a,b) {    return {x: a,y: b};});
-   var Input = F4(function (a,b,c,d) {
-      return {arrows: a,wasd: b,delta: c,space: d};
+   var Input = F5(function (a,b,c,d,e) {
+      return {arrows: a,wasd: b,delta: c,space: d,ctrl: e};
    });
    var input = A2($Signal.sampleOn,
    delta,
-   A5($Signal.map4,
+   A6($Signal.map5,
    Input,
    $Keyboard.arrows,
    $Keyboard.wasd,
    delta,
-   $Keyboard.space));
+   $Keyboard.space,
+   $Keyboard.ctrl));
    var Playing = {ctor: "Playing"};
    var defaultGame = {status: Playing
                      ,player: {pos: {x: 0,y: 0},c: $Color.black}
                      ,playerBullets: _U.list([])
                      ,ts: 0
-                     ,enemies: _U.list([])};
+                     ,enemies: _U.list([])
+                     ,attackType: StraightAttack
+                     ,prevCtrl: false};
    var Dead = {ctor: "Dead"};
    var gameHeight = 500;
    var halfHeight = gameHeight / 2;
@@ -11696,21 +11720,21 @@ Elm.Main.make = function (_elm) {
       return {ctor: "_Tuple2"
              ,_0: A2($List.filter,
              function (enemy) {
-                var _p10 = enemy;
-                var _p11 = _p10._0;
-                return _U.cmp(_p11.x,0 - halfWidth - 100) > 0 && (_U.cmp(_p11.x,
-                halfWidth + 100) < 0 && (_U.cmp(_p11.y,
-                0 - halfHeight - 100) > 0 && _U.cmp(_p11.y,
+                var _p12 = enemy;
+                var _p13 = _p12._0;
+                return _U.cmp(_p13.x,0 - halfWidth - 100) > 0 && (_U.cmp(_p13.x,
+                halfWidth + 100) < 0 && (_U.cmp(_p13.y,
+                0 - halfHeight - 100) > 0 && _U.cmp(_p13.y,
                 halfHeight + 100) < 0));
              },
              enemies)
              ,_1: A2($List.filter,
              function (bullet) {
-                var _p12 = bullet;
-                var _p13 = _p12._0;
-                return _U.cmp(_p13.x,0 - halfWidth - 100) > 0 && (_U.cmp(_p13.x,
-                halfWidth + 100) < 0 && (_U.cmp(_p13.y,
-                0 - halfHeight - 100) > 0 && _U.cmp(_p13.y,
+                var _p14 = bullet;
+                var _p15 = _p14._0;
+                return _U.cmp(_p15.x,0 - halfWidth - 100) > 0 && (_U.cmp(_p15.x,
+                halfWidth + 100) < 0 && (_U.cmp(_p15.y,
+                0 - halfHeight - 100) > 0 && _U.cmp(_p15.y,
                 halfHeight + 100) < 0));
              },
              bullets)};
@@ -11720,25 +11744,29 @@ Elm.Main.make = function (_elm) {
       var enemies$ = A2($List.append,
       A2(stepEnemies,i,game),
       addedEnemies);
-      var addedBullets = A3(addBullets,
+      var attackType$ = i.ctrl && $Basics.not(game.prevCtrl) ? getNextAttack(game.attackType) : game.attackType;
+      var addedBullets = A4(addBullets,
       i.space,
       game.player.pos,
-      $Basics.fst(i.delta));
+      $Basics.fst(i.delta),
+      attackType$);
       var playerBullets$ = A2($List.append,
       addedBullets,
       A2(stepBullets,i,game.playerBullets));
-      var _p14 = A2(checkBulletCollisions,enemies$,playerBullets$);
-      var aliveEnemies$ = _p14._0;
-      var aliveBullets$ = _p14._1;
-      var _p15 = A2(filterOOB,aliveEnemies$,aliveBullets$);
-      var inboundsEnemies$ = _p15._0;
-      var inboundsBullets$ = _p15._1;
+      var _p16 = A2(checkBulletCollisions,enemies$,playerBullets$);
+      var aliveEnemies$ = _p16._0;
+      var aliveBullets$ = _p16._1;
+      var _p17 = A2(filterOOB,aliveEnemies$,aliveBullets$);
+      var inboundsEnemies$ = _p17._0;
+      var inboundsBullets$ = _p17._1;
       var player$ = A2(stepPlayer,i,game.player);
       return _U.update(game,
       {player: player$
       ,playerBullets: inboundsBullets$
       ,ts: $Basics.fst(i.delta)
-      ,enemies: inboundsEnemies$});
+      ,enemies: inboundsEnemies$
+      ,attackType: attackType$
+      ,prevCtrl: i.ctrl});
    });
    var gameState = A3($Signal.foldp,stepGame,defaultGame,input);
    var renderBackground = function (t) {
@@ -11794,6 +11822,10 @@ Elm.Main.make = function (_elm) {
                              ,sineBulletCreate: sineBulletCreate
                              ,sineBulletUpdate: sineBulletUpdate
                              ,circleBulletCreate: circleBulletCreate
+                             ,StraightAttack: StraightAttack
+                             ,DiagonalAttack: DiagonalAttack
+                             ,SinAttack: SinAttack
+                             ,CircleAttack: CircleAttack
                              ,Game: Game
                              ,delta: delta
                              ,input: input
@@ -11809,6 +11841,7 @@ Elm.Main.make = function (_elm) {
                              ,checkBulletEnemyCollision: checkBulletEnemyCollision
                              ,checkBulletCollisions: checkBulletCollisions
                              ,filterOOB: filterOOB
+                             ,getNextAttack: getNextAttack
                              ,stepGame: stepGame
                              ,gameState: gameState
                              ,renderPlayerBullets: renderPlayerBullets

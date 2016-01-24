@@ -26,6 +26,7 @@ type alias Input =
   , wasd : {x : Int, y: Int}
   , delta : (Time.Time, Time.Time)
   , space : Bool
+  , ctrl : Bool
   }
 
 type alias Point =
@@ -117,13 +118,20 @@ circleBulletCreate pos t =
   in
     [ straightBulletUpdate pos (dx * 150) (dy * 150) 0, straightBulletUpdate pos (dy * 150) (dx * 150) 0 ]
 
+type AttackType
+  = StraightAttack
+  | DiagonalAttack
+  | SinAttack
+  | CircleAttack
 
 type alias Game =
   { status : GameStatus
+  , attackType : AttackType
   , player : GameObject
   , playerBullets : List BUpdater
   , ts : Time.Time
   , enemies : List Enemy
+  , prevCtrl : Bool
   }
 
 delta : Signal (Time.Time, Time.Time)
@@ -133,11 +141,12 @@ delta =
 input : Signal Input
 input =
   Signal.sampleOn delta <|
-    Signal.map4 Input
+    Signal.map5 Input
       Keyboard.arrows
       Keyboard.wasd
       delta
       Keyboard.space
+      Keyboard.ctrl
 
 defaultGame : Game
 defaultGame =
@@ -148,6 +157,8 @@ defaultGame =
   , playerBullets = []
   , ts = 0
   , enemies = []
+  , attackType = StraightAttack
+  , prevCtrl = False
   }
 
 stepPlayer : Input -> GameObject -> GameObject
@@ -168,9 +179,15 @@ stepBullets : Input -> List BUpdater -> List BUpdater
 stepBullets i bullets =
     List.map (\updater -> (case updater of BUpdater _ update -> update (snd i.delta))) bullets
 
-addBullets : Bool -> Point -> Time.Time -> List BUpdater
-addBullets space pos t =
-  if space then (circleBulletCreate pos t) else []
+addBullets : Bool -> Point -> Time.Time -> AttackType -> List BUpdater
+addBullets space pos t attack =
+  if space then
+    case attack of
+    StraightAttack -> (forwardBulletCreate pos)
+    DiagonalAttack -> (diagonalBulletCreate pos)
+    SinAttack -> (sineBulletCreate pos t)
+    CircleAttack -> (circleBulletCreate pos t)
+  else []
 
 stepEnemy : Input -> Enemy -> List Enemy
 stepEnemy i enemy =
@@ -231,18 +248,27 @@ filterOOB enemies bullets =
   , List.filter (\bullet -> case bullet of BUpdater pos _ -> (pos.x > -halfWidth - 100) && (pos.x < halfWidth + 100) && (pos.y > -halfHeight - 100) && (pos.y < halfHeight + 100)) bullets
   )
 
+getNextAttack : AttackType -> AttackType
+getNextAttack attack =
+  case attack of
+    StraightAttack -> DiagonalAttack
+    DiagonalAttack -> SinAttack
+    SinAttack -> CircleAttack
+    CircleAttack -> StraightAttack
+
 stepGame : Input -> Game -> Game
 stepGame i game =
   let
     player' = stepPlayer i game.player
-    addedBullets = addBullets i.space game.player.pos (fst i.delta)
+    attackType' = if (i.ctrl &&  (not game.prevCtrl)) then (getNextAttack game.attackType) else game.attackType
+    addedBullets = addBullets i.space game.player.pos (fst i.delta) attackType'
     playerBullets' = List.append addedBullets (stepBullets i game.playerBullets)
     addedEnemies = addEnemies i
     enemies' =  List.append (stepEnemies i game) addedEnemies
     (aliveEnemies', aliveBullets') = checkBulletCollisions enemies' playerBullets'
     (inboundsEnemies', inboundsBullets') = filterOOB aliveEnemies' aliveBullets'
   in
-    {game | player = player', playerBullets = inboundsBullets', ts = (fst i.delta), enemies = inboundsEnemies'}
+    {game | player = player', playerBullets = inboundsBullets', ts = (fst i.delta), enemies = inboundsEnemies', attackType = attackType', prevCtrl = i.ctrl}
 
 gameState : Signal Game
 gameState =
