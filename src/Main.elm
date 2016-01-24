@@ -310,7 +310,7 @@ renderBackground t =
     background = filled Color.green (rect gameWidth gameHeight)
     stripe = filled Color.grey (rect gameWidth (gameHeight/20.0))
   in
-    group (background :: (List.map (\i -> (move (0.0, ((i - 21.0) * 40 + gameHeight - (toFloat ((round (t/5.0)) % gameHeight//2)))) stripe)) [1..20]))
+    group (background :: (List.map (\i -> (move (0.0, ((i - 20.0) * 40 + gameHeight - (toFloat ((round (t/5.0)) % gameHeight//2)))) stripe)) [1..21]))
 
 renderEnemies : List Enemy -> Form
 renderEnemies enemies =
@@ -322,7 +322,9 @@ render game =
     Playing ->
       collage gameWidth gameHeight
         [ (renderBackground game.ts) , (renderEnemies game.enemies), (renderPlayer game.player), (renderPlayerBullets game.playerBullets) ]
-    Dead -> Graphics.Element.show "Dead :(, ctrl to restart"
+    Dead -> collage gameWidth gameHeight
+      [ (renderBackground game.ts) , (renderEnemies game.enemies), (renderPlayer game.player), (renderPlayerBullets game.playerBullets),
+      Graphics.Collage.toForm (Graphics.Element.show "Dead :(, ctrl to restart")]
 
 main =
   Signal.map render gameState

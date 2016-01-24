@@ -11798,12 +11798,12 @@ Elm.Main.make = function (_elm) {
          return A2($Graphics$Collage.move,
          {ctor: "_Tuple2"
          ,_0: 0.0
-         ,_1: (i - 21.0) * 40 + gameHeight - $Basics.toFloat(A2($Basics._op["%"],
+         ,_1: (i - 20.0) * 40 + gameHeight - $Basics.toFloat(A2($Basics._op["%"],
          $Basics.round(t / 5.0),
          gameHeight) / 2 | 0)},
          stripe);
       },
-      _U.range(1,20))));
+      _U.range(1,21))));
    };
    var render = function (game) {
       var _p20 = game.status;
@@ -11816,7 +11816,14 @@ Elm.Main.make = function (_elm) {
                     ,renderPlayer(game.player)
                     ,renderPlayerBullets(game.playerBullets)]));
          } else {
-            return $Graphics$Element.show("Dead :(, ctrl to restart");
+            return A3($Graphics$Collage.collage,
+            gameWidth,
+            gameHeight,
+            _U.list([renderBackground(game.ts)
+                    ,renderEnemies(game.enemies)
+                    ,renderPlayer(game.player)
+                    ,renderPlayerBullets(game.playerBullets)
+                    ,$Graphics$Collage.toForm($Graphics$Element.show("Dead :(, ctrl to restart"))]));
          }
    };
    var main = A2($Signal.map,render,gameState);
