@@ -11433,6 +11433,17 @@ Elm.Main.make = function (_elm) {
    $Signal = Elm.Signal.make(_elm),
    $Time = Elm.Time.make(_elm);
    var _op = {};
+   var renderEnemies = function (enemies) {
+      return $Graphics$Collage.group(A2($List.map,
+      function (enemy) {
+         var _p0 = enemy;
+         var _p1 = _p0._0;
+         return A2($Graphics$Collage.move,
+         {ctor: "_Tuple2",_0: _p1.x,_1: _p1.y},
+         _p0._1);
+      },
+      enemies));
+   };
    var renderPlayer = function (player) {
       var c = player.c;
       var triangle = A2($Graphics$Collage.filled,
@@ -11453,27 +11464,129 @@ Elm.Main.make = function (_elm) {
       $Graphics$Collage.circle(5));
       return $Graphics$Collage.group(A2($List.map,
       function (updater) {
-         var _p0 = updater;
-         var _p1 = _p0._0;
+         var _p2 = updater;
+         var _p3 = _p2._0;
          return A2($Graphics$Collage.move,
-         {ctor: "_Tuple2",_0: _p1.x,_1: _p1.y},
+         {ctor: "_Tuple2",_0: _p3.x,_1: _p3.y},
          bullet);
       },
       bullets));
    };
+   var dist = F2(function (p1,p2) {
+      var dy = p1.y - p2.y;
+      var dx = p1.x - p2.x;
+      return dx * dx + dy * dy;
+   });
+   var checkEnemyBulletCollision = F2(function (enemy,bullets) {
+      var enemyPos = function () {
+         var _p4 = enemy;
+         return _p4._0;
+      }();
+      return A2($List.any,
+      function (bullet) {
+         var _p5 = bullet;
+         return _U.cmp(A2(dist,enemyPos,_p5._0),75) < 0;
+      },
+      bullets);
+   });
+   var checkBulletEnemyCollision = F2(function (bullet,enemies) {
+      var bulletPos = function () {
+         var _p6 = bullet;
+         return _p6._0;
+      }();
+      return A2($List.any,
+      function (enemy) {
+         var _p7 = enemy;
+         return _U.cmp(A2(dist,_p7._0,bulletPos),75) < 0;
+      },
+      enemies);
+   });
+   var checkBulletCollisions = F2(function (enemies,bullets) {
+      var filteredBullets = A2($List.filter,
+      function (bullet) {
+         return $Basics.not(A2(checkBulletEnemyCollision,
+         bullet,
+         enemies));
+      },
+      bullets);
+      var filteredEnemies = A2($List.filter,
+      function (enemy) {
+         return $Basics.not(A2(checkEnemyBulletCollision,
+         enemy,
+         bullets));
+      },
+      enemies);
+      return {ctor: "_Tuple2"
+             ,_0: filteredEnemies
+             ,_1: filteredBullets};
+   });
+   var stepEnemy = F2(function (i,enemy) {
+      var _p8 = enemy;
+      return _p8._2($Basics.snd(i.delta));
+   });
+   var stepEnemies = F2(function (i,game) {
+      var enemystepper = stepEnemy(i);
+      return A2($List.concatMap,enemystepper,game.enemies);
+   });
    var stepBullets = F2(function (i,bullets) {
       return A2($List.map,
       function (updater) {
-         var _p2 = updater;
-         return _p2._1($Basics.snd(i.delta));
+         var _p9 = updater;
+         return _p9._1($Basics.snd(i.delta));
       },
       bullets);
    });
    var delta = $Time.timestamp(A2($Signal.map,
    $Time.inSeconds,
    $Time.fps(30)));
-   var Game = F4(function (a,b,c,d) {
-      return {status: a,player: b,playerBullets: c,ts: d};
+   var Game = F5(function (a,b,c,d,e) {
+      return {status: a
+             ,player: b
+             ,playerBullets: c
+             ,ts: d
+             ,enemies: e};
+   });
+   var Enemy = F3(function (a,b,c) {
+      return {ctor: "Enemy",_0: a,_1: b,_2: c};
+   });
+   var straightEnemyUpdate = F4(function (pos,dx,dy,delta) {
+      var newSprite = A2($Graphics$Collage.filled,
+      $Color.red,
+      A2($Graphics$Collage.rect,10,10));
+      var newpos = {x: pos.x + dx * delta,y: pos.y + dy * delta};
+      return _U.list([A3(Enemy,
+      newpos,
+      newSprite,
+      A3(straightEnemyUpdate,newpos,dx,dy))]);
+   });
+   var forwardEnemyCreate = function (pos) {
+      return A4(straightEnemyUpdate,pos,0,-150,0);
+   };
+   var explodingEnemyUpdate = F5(function (pos,dx,dy,ticks,delta) {
+      var newSprite = A2($Graphics$Collage.filled,
+      $Color.yellow,
+      A2($Graphics$Collage.ngon,3,10));
+      var newpos = {x: pos.x + dx * delta,y: pos.y + dy * delta};
+      var explodedEnemies = $List.concat(_U.list([A4(straightEnemyUpdate,
+                                                 newpos,
+                                                 -100,
+                                                 100,
+                                                 0)
+                                                 ,A4(straightEnemyUpdate,newpos,-100,-100,0)
+                                                 ,A4(straightEnemyUpdate,newpos,100,-100,0)
+                                                 ,A4(straightEnemyUpdate,newpos,100,100,0)]));
+      return _U.cmp(ticks,
+      0) < 1 ? $List.concat(_U.list([_U.list([A3(Enemy,
+                                    newpos,
+                                    newSprite,
+                                    A4(explodingEnemyUpdate,newpos,dx,dy,100))])
+                                    ,explodedEnemies])) : _U.list([A3(Enemy,
+      newpos,
+      newSprite,
+      A4(explodingEnemyUpdate,newpos,dx,dy,ticks - 1))]);
+   });
+   var explodingEnemyCreate = F3(function (pos,dx,dy) {
+      return A5(explodingEnemyUpdate,pos,dx,dy,100,0);
    });
    var BUpdater = F2(function (a,b) {
       return {ctor: "BUpdater",_0: a,_1: b};
@@ -11491,6 +11604,15 @@ Elm.Main.make = function (_elm) {
       return _U.list([A4(straightBulletUpdate,pos,150,150,0)
                      ,A4(straightBulletUpdate,pos,-150,150,0)]);
    };
+   var circleBulletCreate = F2(function (pos,t) {
+      var dy = $Basics.cos(t / 10);
+      var dx = $Basics.sin(t / 10);
+      return _U.list([A4(straightBulletUpdate,pos,dx * 150,dy * 150,0)
+                     ,A4(straightBulletUpdate,pos,dy * 150,dx * 150,0)]);
+   });
+   var addBullets = F3(function (space,pos,t) {
+      return space ? A2(circleBulletCreate,pos,t) : _U.list([]);
+   });
    var sineBulletUpdate = F4(function (pos,
    posInitial,
    initialT,
@@ -11506,9 +11628,6 @@ Elm.Main.make = function (_elm) {
    });
    var sineBulletCreate = F2(function (pos,t) {
       return _U.list([A4(sineBulletUpdate,pos,pos,t,0)]);
-   });
-   var addBullets = F3(function (space,pos,t) {
-      return space ? A2(sineBulletCreate,pos,t) : _U.list([]);
    });
    var GameObject = F2(function (a,b) {    return {pos: a,c: b};});
    var Point = F2(function (a,b) {    return {x: a,y: b};});
@@ -11527,7 +11646,8 @@ Elm.Main.make = function (_elm) {
    var defaultGame = {status: Playing
                      ,player: {pos: {x: 0,y: 0},c: $Color.black}
                      ,playerBullets: _U.list([])
-                     ,ts: 0};
+                     ,ts: 0
+                     ,enemies: _U.list([])};
    var Dead = {ctor: "Dead"};
    var gameHeight = 500;
    var halfHeight = gameHeight / 2;
@@ -11537,14 +11657,14 @@ Elm.Main.make = function (_elm) {
       var delta = $Basics.snd(i.delta);
       var pos = player.pos;
       var arrows = i.arrows;
-      var dx = _U.cmp(arrows.x,0) < 0 ? -75.0 : _U.cmp(arrows.x,
-      0) > 0 ? 75.0 : 0.0;
+      var dx = _U.cmp(arrows.x,0) < 0 ? -175.0 : _U.cmp(arrows.x,
+      0) > 0 ? 175.0 : 0.0;
       var newx = A3($Basics.clamp,
       0 - halfWidth,
       halfWidth,
       pos.x + dx * delta);
-      var dy = _U.cmp(arrows.y,0) < 0 ? -75.0 : _U.cmp(arrows.y,
-      0) > 0 ? 50.0 : 0.0;
+      var dy = _U.cmp(arrows.y,0) < 0 ? -175.0 : _U.cmp(arrows.y,
+      0) > 0 ? 100.0 : 0.0;
       var newy = A3($Basics.clamp,
       0 - halfHeight,
       halfHeight,
@@ -11552,7 +11672,54 @@ Elm.Main.make = function (_elm) {
       var pos$ = _U.update(pos,{x: newx,y: newy});
       return _U.update(player,{pos: pos$});
    });
+   var addEnemies = function (i) {
+      var ts = $Basics.fst(i.delta);
+      var spawnStraight = _U.eq(A2($Basics._op["%"],
+      $Basics.round(ts / 10.0),
+      4),
+      0);
+      var straightEnemies = spawnStraight ? forwardEnemyCreate({x: $Basics.sin($Basics.fst(i.delta)) * halfWidth
+                                                               ,y: halfHeight}) : _U.list([]);
+      var spawnExploding = _U.eq(A2($Basics._op["%"],
+      $Basics.round(ts / 10.0),
+      5),
+      0);
+      var explodingEnemies = spawnExploding ? A3(explodingEnemyCreate,
+      {x: $Basics.sin($Basics.fst(i.delta)) * halfWidth
+      ,y: halfHeight},
+      0,
+      -50) : _U.list([]);
+      return $List.concat(_U.list([explodingEnemies
+                                  ,straightEnemies]));
+   };
+   var filterOOB = F2(function (enemies,bullets) {
+      return {ctor: "_Tuple2"
+             ,_0: A2($List.filter,
+             function (enemy) {
+                var _p10 = enemy;
+                var _p11 = _p10._0;
+                return _U.cmp(_p11.x,0 - halfWidth - 100) > 0 && (_U.cmp(_p11.x,
+                halfWidth + 100) < 0 && (_U.cmp(_p11.y,
+                0 - halfHeight - 100) > 0 && _U.cmp(_p11.y,
+                halfHeight + 100) < 0));
+             },
+             enemies)
+             ,_1: A2($List.filter,
+             function (bullet) {
+                var _p12 = bullet;
+                var _p13 = _p12._0;
+                return _U.cmp(_p13.x,0 - halfWidth - 100) > 0 && (_U.cmp(_p13.x,
+                halfWidth + 100) < 0 && (_U.cmp(_p13.y,
+                0 - halfHeight - 100) > 0 && _U.cmp(_p13.y,
+                halfHeight + 100) < 0));
+             },
+             bullets)};
+   });
    var stepGame = F2(function (i,game) {
+      var addedEnemies = addEnemies(i);
+      var enemies$ = A2($List.append,
+      A2(stepEnemies,i,game),
+      addedEnemies);
       var addedBullets = A3(addBullets,
       i.space,
       game.player.pos,
@@ -11560,11 +11727,18 @@ Elm.Main.make = function (_elm) {
       var playerBullets$ = A2($List.append,
       addedBullets,
       A2(stepBullets,i,game.playerBullets));
+      var _p14 = A2(checkBulletCollisions,enemies$,playerBullets$);
+      var aliveEnemies$ = _p14._0;
+      var aliveBullets$ = _p14._1;
+      var _p15 = A2(filterOOB,aliveEnemies$,aliveBullets$);
+      var inboundsEnemies$ = _p15._0;
+      var inboundsBullets$ = _p15._1;
       var player$ = A2(stepPlayer,i,game.player);
       return _U.update(game,
       {player: player$
-      ,playerBullets: playerBullets$
-      ,ts: $Basics.fst(i.delta)});
+      ,playerBullets: inboundsBullets$
+      ,ts: $Basics.fst(i.delta)
+      ,enemies: inboundsEnemies$});
    });
    var gameState = A3($Signal.foldp,stepGame,defaultGame,input);
    var renderBackground = function (t) {
@@ -11593,6 +11767,7 @@ Elm.Main.make = function (_elm) {
       gameWidth,
       gameHeight,
       _U.list([renderBackground(game.ts)
+              ,renderEnemies(game.enemies)
               ,renderPlayer(game.player)
               ,renderPlayerBullets(game.playerBullets)]));
    };
@@ -11608,11 +11783,17 @@ Elm.Main.make = function (_elm) {
                              ,Point: Point
                              ,GameObject: GameObject
                              ,BUpdater: BUpdater
+                             ,Enemy: Enemy
+                             ,forwardEnemyCreate: forwardEnemyCreate
+                             ,explodingEnemyCreate: explodingEnemyCreate
+                             ,explodingEnemyUpdate: explodingEnemyUpdate
+                             ,straightEnemyUpdate: straightEnemyUpdate
                              ,forwardBulletCreate: forwardBulletCreate
                              ,diagonalBulletCreate: diagonalBulletCreate
                              ,straightBulletUpdate: straightBulletUpdate
                              ,sineBulletCreate: sineBulletCreate
                              ,sineBulletUpdate: sineBulletUpdate
+                             ,circleBulletCreate: circleBulletCreate
                              ,Game: Game
                              ,delta: delta
                              ,input: input
@@ -11620,11 +11801,20 @@ Elm.Main.make = function (_elm) {
                              ,stepPlayer: stepPlayer
                              ,stepBullets: stepBullets
                              ,addBullets: addBullets
+                             ,stepEnemy: stepEnemy
+                             ,stepEnemies: stepEnemies
+                             ,addEnemies: addEnemies
+                             ,dist: dist
+                             ,checkEnemyBulletCollision: checkEnemyBulletCollision
+                             ,checkBulletEnemyCollision: checkBulletEnemyCollision
+                             ,checkBulletCollisions: checkBulletCollisions
+                             ,filterOOB: filterOOB
                              ,stepGame: stepGame
                              ,gameState: gameState
                              ,renderPlayerBullets: renderPlayerBullets
                              ,renderPlayer: renderPlayer
                              ,renderBackground: renderBackground
+                             ,renderEnemies: renderEnemies
                              ,render: render
                              ,main: main};
 };

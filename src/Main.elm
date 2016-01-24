@@ -41,6 +41,39 @@ type alias GameObject =
   }
 
 type BUpdater = BUpdater Point (Float -> BUpdater)
+type Enemy = Enemy Point Form (Float -> (List Enemy))
+
+forwardEnemyCreate : Point -> List Enemy
+forwardEnemyCreate pos =
+  (straightEnemyUpdate pos 0 -150 0)
+
+explodingEnemyCreate : Point -> Float -> Float -> List Enemy
+explodingEnemyCreate pos dx dy =
+  explodingEnemyUpdate pos dx dy 100 0
+
+explodingEnemyUpdate : Point -> Float -> Float -> Int -> Float -> List Enemy
+explodingEnemyUpdate pos dx dy ticks delta =
+  let
+    newpos = { x = pos.x + dx * delta, y = pos.y + dy * delta }
+    newSprite = filled Color.yellow (ngon 3 10)
+    explodedEnemies = (List.concat [ (straightEnemyUpdate newpos -100  100 0)
+                                   , (straightEnemyUpdate newpos -100 -100 0)
+                                   , (straightEnemyUpdate newpos  100 -100 0)
+                                   , (straightEnemyUpdate newpos  100  100 0)
+                                   ])
+  in
+    if (ticks <= 0) then (List.concat [[Enemy newpos newSprite (explodingEnemyUpdate newpos dx dy 100)], explodedEnemies]) else
+      [Enemy newpos newSprite (explodingEnemyUpdate newpos dx dy (ticks - 1))]
+
+straightEnemyUpdate : Point -> Float -> Float -> Float -> List Enemy
+straightEnemyUpdate pos dx dy delta =
+  let
+    newpos = { x = pos.x + dx * delta
+             , y = pos.y + dy * delta
+             }
+    newSprite = filled Color.red (rect 10 10)
+  in
+    [ Enemy newpos newSprite (straightEnemyUpdate newpos dx dy) ]
 
 forwardBulletCreate : Point -> List BUpdater
 forwardBulletCreate pos =
@@ -76,12 +109,21 @@ sineBulletUpdate pos posInitial initialT deltaT =
     in
       BUpdater pos' (sineBulletUpdate pos' posInitial initialT)
 
+circleBulletCreate : Point -> Time.Time -> List BUpdater
+circleBulletCreate pos t =
+  let
+    dx = sin (t / 10)
+    dy = cos (t / 10)
+  in
+    [ straightBulletUpdate pos (dx * 150) (dy * 150) 0, straightBulletUpdate pos (dy * 150) (dx * 150) 0 ]
+
 
 type alias Game =
   { status : GameStatus
   , player : GameObject
   , playerBullets : List BUpdater
   , ts : Time.Time
+  , enemies : List Enemy
   }
 
 delta : Signal (Time.Time, Time.Time)
@@ -105,6 +147,7 @@ defaultGame =
              }
   , playerBullets = []
   , ts = 0
+  , enemies = []
   }
 
 stepPlayer : Input -> GameObject -> GameObject
@@ -113,8 +156,8 @@ stepPlayer i player =
     arrows = i.arrows
     pos = player.pos
     delta = (snd i.delta)
-    dx = if arrows.x < 0 then -75.0 else if arrows.x > 0 then 75.0 else 0.0
-    dy = if arrows.y < 0 then -75.0 else if arrows.y > 0 then 50.0 else 0.0
+    dx = if arrows.x < 0 then -175.0 else if arrows.x > 0 then 175.0 else 0.0
+    dy = if arrows.y < 0 then -175.0 else if arrows.y > 0 then 100.0 else 0.0
     newx = clamp -halfWidth halfWidth (pos.x + dx * delta)
     newy = clamp -halfHeight halfHeight (pos.y + dy * delta)
     pos' = {pos | x = newx, y = newy }
@@ -127,7 +170,66 @@ stepBullets i bullets =
 
 addBullets : Bool -> Point -> Time.Time -> List BUpdater
 addBullets space pos t =
-  if space then (sineBulletCreate pos t) else []
+  if space then (circleBulletCreate pos t) else []
+
+stepEnemy : Input -> Enemy -> List Enemy
+stepEnemy i enemy =
+  case enemy of
+    Enemy pos shape updater -> (updater (snd i.delta))
+
+stepEnemies : Input -> Game -> List Enemy
+stepEnemies i game =
+  let
+    enemystepper = stepEnemy i
+  in
+    List.concatMap enemystepper game.enemies
+
+addEnemies : Input -> List Enemy
+addEnemies i =
+  let
+    ts = (fst i.delta)
+    spawnStraight  = ((round (ts / 10.0)) % 4) == 0
+    spawnExploding = ((round (ts / 10.0)) % 5) == 0
+    straightEnemies = if spawnStraight then (forwardEnemyCreate {x = (sin (fst i.delta)) * halfWidth, y = halfHeight}) else []
+    explodingEnemies = if spawnExploding then (explodingEnemyCreate {x = (sin (fst i.delta)) * halfWidth, y = halfHeight} 0 -50) else []
+  in
+    List.concat [explodingEnemies, straightEnemies]
+
+dist : Point -> Point -> Float
+dist p1 p2 =
+  let
+    dx = p1.x - p2.x
+    dy = p1.y - p2.y
+  in
+    dx*dx + dy*dy
+
+checkEnemyBulletCollision : Enemy -> List BUpdater -> Bool
+checkEnemyBulletCollision enemy bullets =
+  let
+    enemyPos = case enemy of Enemy pos _ _ -> pos
+  in
+    List.any (\bullet -> case bullet of BUpdater bulletPos _ -> ((dist enemyPos bulletPos) < 75)) bullets
+
+checkBulletEnemyCollision : BUpdater -> List Enemy -> Bool
+checkBulletEnemyCollision bullet enemies =
+  let
+    bulletPos = case bullet of BUpdater pos _ -> pos
+  in
+    List.any (\enemy -> case enemy of Enemy enemyPos _ _ -> ((dist enemyPos bulletPos) < 75)) enemies
+
+checkBulletCollisions : List Enemy -> List BUpdater -> (List Enemy, List BUpdater)
+checkBulletCollisions enemies bullets =
+  let
+    filteredEnemies = List.filter (\enemy -> not (checkEnemyBulletCollision enemy bullets)) enemies
+    filteredBullets =  List.filter (\bullet -> not (checkBulletEnemyCollision bullet enemies)) bullets
+  in
+    (filteredEnemies, filteredBullets)
+
+filterOOB : List Enemy -> List BUpdater -> (List Enemy , List BUpdater)
+filterOOB enemies bullets =
+  ( List.filter (\enemy -> case enemy of Enemy pos _ _ -> (pos.x > -halfWidth - 100) && (pos.x < halfWidth + 100) && (pos.y > -halfHeight - 100) && (pos.y < halfHeight + 100)) enemies
+  , List.filter (\bullet -> case bullet of BUpdater pos _ -> (pos.x > -halfWidth - 100) && (pos.x < halfWidth + 100) && (pos.y > -halfHeight - 100) && (pos.y < halfHeight + 100)) bullets
+  )
 
 stepGame : Input -> Game -> Game
 stepGame i game =
@@ -135,9 +237,12 @@ stepGame i game =
     player' = stepPlayer i game.player
     addedBullets = addBullets i.space game.player.pos (fst i.delta)
     playerBullets' = List.append addedBullets (stepBullets i game.playerBullets)
-    -- playerBullets'' = cleanUpBullets playerBullets
+    addedEnemies = addEnemies i
+    enemies' =  List.append (stepEnemies i game) addedEnemies
+    (aliveEnemies', aliveBullets') = checkBulletCollisions enemies' playerBullets'
+    (inboundsEnemies', inboundsBullets') = filterOOB aliveEnemies' aliveBullets'
   in
-    {game | player = player', playerBullets = playerBullets', ts = (fst i.delta)}
+    {game | player = player', playerBullets = inboundsBullets', ts = (fst i.delta), enemies = inboundsEnemies'}
 
 gameState : Signal Game
 gameState =
@@ -173,11 +278,14 @@ renderBackground t =
   in
     group (background :: (List.map (\i -> (move (0.0, ((i - 21.0) * 40 + gameHeight - (toFloat ((round (t/5.0)) % gameHeight//2)))) stripe)) [1..20]))
 
+renderEnemies : List Enemy -> Form
+renderEnemies enemies =
+  group (List.map (\enemy -> case enemy of Enemy pos shape _ -> move (pos.x, pos.y) shape) enemies)
 
 render : Game -> Element
 render game =
   collage gameWidth gameHeight
-    [ (renderBackground game.ts) , (renderPlayer game.player), (renderPlayerBullets game.playerBullets) ]
+    [ (renderBackground game.ts) , (renderEnemies game.enemies), (renderPlayer game.player), (renderPlayerBullets game.playerBullets) ]
 
 main =
   Signal.map render gameState
