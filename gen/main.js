@@ -11475,7 +11475,7 @@ Elm.Main.make = function (_elm) {
    var dist = F2(function (p1,p2) {
       var dy = p1.y - p2.y;
       var dx = p1.x - p2.x;
-      return dx * dx + dy * dy;
+      return $Basics.sqrt(dx * dx + dy * dy);
    });
    var checkEnemyBulletCollision = F2(function (enemy,bullets) {
       var enemyPos = function () {
@@ -11485,7 +11485,7 @@ Elm.Main.make = function (_elm) {
       return A2($List.any,
       function (bullet) {
          var _p5 = bullet;
-         return _U.cmp(A2(dist,enemyPos,_p5._0),75) < 0;
+         return _U.cmp(A2(dist,enemyPos,_p5._0),10) < 0;
       },
       bullets);
    });
@@ -11497,7 +11497,7 @@ Elm.Main.make = function (_elm) {
       return A2($List.any,
       function (enemy) {
          var _p7 = enemy;
-         return _U.cmp(A2(dist,_p7._0,bulletPos),75) < 0;
+         return _U.cmp(A2(dist,_p7._0,bulletPos),10) < 0;
       },
       enemies);
    });
@@ -11612,11 +11612,23 @@ Elm.Main.make = function (_elm) {
       A3(straightBulletUpdate,newpos,dx,dy));
    });
    var forwardBulletCreate = function (pos) {
-      return _U.list([A4(straightBulletUpdate,pos,0,150,0)]);
+      return _U.list([A4(straightBulletUpdate,
+      _U.update(pos,{y: pos.y + 20}),
+      0,
+      150,
+      0)]);
    };
    var diagonalBulletCreate = function (pos) {
-      return _U.list([A4(straightBulletUpdate,pos,150,150,0)
-                     ,A4(straightBulletUpdate,pos,-150,150,0)]);
+      return _U.list([A4(straightBulletUpdate,
+                     {x: pos.x + 10,y: pos.y + 10},
+                     150,
+                     150,
+                     0)
+                     ,A4(straightBulletUpdate,
+                     {x: pos.x - 10,y: pos.y + 10},
+                     -150,
+                     150,
+                     0)]);
    };
    var circleBulletCreate = F2(function (pos,t) {
       var dy = $Basics.cos(t / 10);
@@ -11677,7 +11689,7 @@ Elm.Main.make = function (_elm) {
       return A2($List.any,
       function (enemy) {
          var _p12 = enemy;
-         return _U.cmp(A2(dist,player.pos,_p12._0),20) < 0;
+         return _U.cmp(A2(dist,player.pos,_p12._0),15) < 0;
       },
       enemies) ? Dead : Playing;
    });

@@ -78,12 +78,12 @@ straightEnemyUpdate pos dx dy delta =
 
 forwardBulletCreate : Point -> List BUpdater
 forwardBulletCreate pos =
-  [ straightBulletUpdate pos 0 150 0 ]
+  [ straightBulletUpdate {pos | y = pos.y + 20} 0 150 0 ]
 
 diagonalBulletCreate : Point -> List BUpdater
 diagonalBulletCreate pos =
-  [ (straightBulletUpdate pos 150 150 0)
-  , (straightBulletUpdate pos -150 150 0)
+  [ (straightBulletUpdate {x = pos.x + 10, y = pos.y + 10} 150 150 0)
+  , (straightBulletUpdate {x = pos.x - 10, y = pos.y + 10} -150 150 0)
   ]
 
 straightBulletUpdate : Point -> Float -> Float -> Float -> BUpdater
@@ -218,21 +218,21 @@ dist p1 p2 =
     dx = p1.x - p2.x
     dy = p1.y - p2.y
   in
-    dx*dx + dy*dy
+    sqrt(dx*dx + dy*dy)
 
 checkEnemyBulletCollision : Enemy -> List BUpdater -> Bool
 checkEnemyBulletCollision enemy bullets =
   let
     enemyPos = case enemy of Enemy pos _ _ -> pos
   in
-    List.any (\bullet -> case bullet of BUpdater bulletPos _ -> ((dist enemyPos bulletPos) < 75)) bullets
+    List.any (\bullet -> case bullet of BUpdater bulletPos _ -> ((dist enemyPos bulletPos) < 10)) bullets
 
 checkBulletEnemyCollision : BUpdater -> List Enemy -> Bool
 checkBulletEnemyCollision bullet enemies =
   let
     bulletPos = case bullet of BUpdater pos _ -> pos
   in
-    List.any (\enemy -> case enemy of Enemy enemyPos _ _ -> ((dist enemyPos bulletPos) < 75)) enemies
+    List.any (\enemy -> case enemy of Enemy enemyPos _ _ -> ((dist enemyPos bulletPos) < 10)) enemies
 
 checkBulletCollisions : List Enemy -> List BUpdater -> (List Enemy, List BUpdater)
 checkBulletCollisions enemies bullets =
@@ -258,7 +258,7 @@ getNextAttack attack =
 
 checkDead : GameObject -> List Enemy -> GameStatus
 checkDead player enemies =
-  if (List.any (\enemy -> case enemy of Enemy enemyPos _ _ -> (dist player.pos enemyPos) < 20) enemies) then Dead else Playing
+  if (List.any (\enemy -> case enemy of Enemy enemyPos _ _ -> (dist player.pos enemyPos) < 15) enemies) then Dead else Playing
 
 stepGame : Input -> Game -> Game
 stepGame i game =
